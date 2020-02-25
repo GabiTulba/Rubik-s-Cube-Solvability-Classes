@@ -2,13 +2,15 @@
 
 \usepackage{amsmath}
 \usepackage{graphicx}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
 
 \title{Rubik's Cube Solvability Classes}
 \date{March, 2020}
 \author{Tulba-Lecu Theodor-Gabriel\\
-	Dragomir Ioan\\
-	email: [REDACTED] \\
-	Institute: [REDACTED]}
+    Dragomir Ioan\\
+    email: [REDACTED] \\
+    Institute: [REDACTED]}
 
 \begin{document}
     
@@ -56,8 +58,131 @@
         \subsection{Reduction to last-layer}
             blah blah proof by contradiction and deterministic solution
         
-        \subsection{Searchspace bruteforce result}
-            blah blah only code here
+        \subsection{Naive full search space exploration}
+
+            Our first approach consisted in exploring all possible last layer
+            states and modelling the possible transitions in between these. In
+            order to simplify the search, we abstracted away the notion of
+            single turn moves, thus only focusing on PLL and OLL algorithms
+            given their documented existence, but not needing to simulate their
+            constituent moves.
+            For instance, in the case of the H permutation, it is superfluous to
+            simulate the move sequence [M2 U M2 U2 M2 U M2] and keep track of
+            all 26 cubies, given that we know the final result will be that the
+            first 2 layers remain unchanged and the last layer edge cubies keep
+            their orientation but swap positions with their opposite.
+            Thus, it is sufficient to only encode these position and orientation
+            transforms last layer algorithms.
+
+            Through experimentation, we found that only a relatively minimal set
+            of algorithms need to be implemented for full search space coverage.
+            For example, all OLL algorithms can be reduced to a sequence of U
+            turns and [F R U R' U' F'] sequences, and all PLL algorithms can
+            be reduced to repeated U turns and Aa, Z, and Ua permutations.
+
+            States are encoded by 4 edge and 4 corner states. Edges and corners
+            are numbered in counter clockwise order starting with the right
+            edge and back-right corner, as illustrated in the following figure.
+
+            \begin{table}[h]
+            \centering
+            \begin{tabular}{|l|l|l|}
+            \hline
+            corner 1 & edge 1 & corner 0\\
+            \hline
+            edge 2 & & edge 0\\
+            \hline
+            corner 2 & edge 3 & corner 3\\
+            \hline
+            \end{tabular}
+            \end{table}
+
+            As a convention, we also number sticker colors according to what
+            what edge they are on in the solved state. Color 0 is the color of
+            the right face, color 1 is the color of the back face, etc.
+
+            \begin{align}
+            &\nonumber edgeStates[i] = (color, flipped) \\
+            &\nonumber cornerStates[j] = (color, rotation) \\
+            &\nonumber i, j \in \{0, 1, 2, 3\},\ color \in \{0, 1, 2, 3\} \\
+            &\nonumber flipped = \begin{cases}
+                0, & \text{if the yellow sticker is facing up}\\
+                1, & \text{if the yellow sticker is facing outwards}
+            \end{cases} \\
+            &\nonumber rotation = \begin{cases}
+                0, & \text{if the yellow sticker is facing up}\\
+                1,\ 2, & \text{by successive counter-clockwise rotations}
+            \end{cases}
+            \end{align}
+            
+            We define two operators on these states: flipEdge(edge)
+            which flips an edge's orientation, and rotateCorner(corner,
+            third\_turns) which adds a certain number of third turns to a
+            corner's rotation (addition modulo 3).
+            By combining these two operators and permutations on the edges' and
+            corners' positions we can achieve any last layer algorithm. For
+            example, the Sune algorithm can be decomposed into the edge
+            permutation,
+            \begin{align}
+            \begin{pmatrix}
+            &edgeStates[0] &edgeStates[1] &edgeStates[2] &edgeStates[3] \\
+            &edgeStates[2] &edgeStates[1] &edgeStates[3] &edgeStates[0]
+            \end{pmatrix} \nonumber
+            \end{align}
+            three corner rotations,\\\\
+            rotateCorner(cornerStates[1], 2)\\
+            rotateCorner(cornerStates[2], 2)\\
+            rotateCorner(cornerStates[3], 2)\\\\
+            and two corner swaps, represented by the permutation:
+            \begin{align}
+            \begin{pmatrix}
+            &cornerStates[0] &cornerStates[1] &cornerStates[2] &cornerStates[3] \\
+            &cornerStates[2] &cornerStates[3] &cornerStates[0] &cornerStates[1]
+            \end{pmatrix} \nonumber
+            \end{align}
+
+            To explore all possible states, we needed an efficient way to check
+            whether a certain state was visited in the past. For this we created
+            a simplistic hashing function which transforms a given last layer
+            state to an integer, accounting for potential rotations of similar
+            states. The hashing algorithm first rotates the cube so the 0 edge
+            cubie is in the 0 position, and then employs a simple arithmetic
+            coding (I might be way off and this might not be arithmetic coding
+            at all) which multiplies an accumulator by 8 for edges and 12 for
+            corners, adding the corresponding color and flip/rotation after each
+            multiplication.
+
+            \begin{algorithmic}
+            \Repeat
+                \State RotateClockwise()
+            \Until {$edgeStates[0].color = 0$}
+            \State $hash \gets edgeStates[0].flipped$
+            \For {$i \gets 1, 3$}
+                \State $hash \gets hash * 8 + edgeStates[i].flipped * 4 + edgeStates[i].color$
+            \EndFor
+            \For {$j \gets 0, 3$}
+                \State $hash \gets hash * 12 + cornerStates[j].rotation * 4 + cornerStates[j].color$
+            \EndFor \\
+            \Return hash
+            \end{algorithmic}
+
+            Now that we can quickly identify identical positions, we use an
+            associative array whose keys are state hashes and whose values are
+            integers so that two states have the same value iff it is possible
+            to reach one state starting at the other, and vice versa.
+
+            We define a solvability class to be a maximal subset of the state
+            set such that any two of its elements have a sequence of algorithms
+            which take one state to the other. (this will probably be moved to
+            some earlier section)
+
+            Thus, this array's values can be used as identifiers for the
+            discovered solvability classes.
+
+            The search space exploration algorithm is as follows.
+
+            ...
+
         
         \subsection{Giving an answer}
             \subsubsection{Corner orientation}
